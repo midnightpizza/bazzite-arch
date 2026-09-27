@@ -1,9 +1,26 @@
-FROM ghcr.io/ublue-os/arch-toolbox@sha256:9c346c4e5cfcfd93242e05e8ac5f93c7f75c36e8cf6c6e9da59797ec48dcb9a5 AS bazzite-arch
+FROM archlinux:base-devel
 
-COPY system_files /
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm \
+        vim nano clang cmake ninja python git sudo htop && \
+    pacman -S --clean --clean && \
+    rm -rf /var/cache/pacman/pkg/*
 
-# Install needed packages
-RUN pacman -Syu \
+RUN printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
+
+RUN useradd -m -G wheel --shell=/bin/bash build && \
+    echo "build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+USER build
+WORKDIR /home/build
+RUN git clone https://aur.archlinux.org/yay.git && \
+    cd yay && makepkg -si --noconfirm && \
+    cd .. && rm -rf yay
+USER root
+WORKDIR /
+
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm \
         lib32-vulkan-radeon \
         libva-mesa-driver \
         intel-media-driver \
@@ -11,90 +28,36 @@ RUN pacman -Syu \
         lib32-vulkan-mesa-layers \
         lib32-libnm \
         openal \
-        pipewire \
-        pipewire-pulse \
-        pipewire-alsa \
-        pipewire-jack \
+        pipewire pipewire-pulse pipewire-alsa pipewire-jack \
         wireplumber \
-        lib32-pipewire \
-        lib32-pipewire-jack \
-        lib32-libpulse \
-        lib32-openal \
-        xdg-desktop-portal-kde \
-        vim \
-        nano \
-        hyfetch \
-        fish \
-        yad \
-        xdg-user-dirs \
-        xdotool \
-        xorg-xwininfo \
-        wmctrl \
+        lib32-pipewire lib32-pipewire-jack lib32-libpulse \
+        yad xdg-user-dirs xdotool xorg-xwininfo wmctrl \
         wxwidgets-gtk3 \
-        rocm-opencl-runtime \
-        rocm-hip-runtime \
-        libbsd \
-        noto-fonts-cjk \
-        glibc-locales \
-        --noconfirm && \
-    pacman -S \
-        steam \
-        lutris \
-        mangohud \
-        lib32-mangohud \
-        --noconfirm && \
+        rocm-opencl-runtime rocm-hip-runtime \
+        libbsd noto-fonts-cjk glibc-locales \
+        firefox thunar mousepad dolphin \
+        steam mangohud lib32-mangohud && \
     pacman -S --clean --clean && \
     rm -rf /var/cache/pacman/pkg/*
-        # Steam/Lutris/Wine installed separately so they use the dependencies above and don't try to install their own.
 
-# Create build user
-RUN useradd -m --shell=/bin/bash build && usermod -L build && \
-    echo "build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
-    echo "root ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-
-# Install AUR packages
 USER build
 WORKDIR /home/build
-RUN paru -S \
-        aur/protontricks \
-        aur/vkbasalt \
-        aur/lib32-vkbasalt \
-        aur/obs-vkcapture-git \
-        aur/lib32-obs-vkcapture-git \
-        aur/lib32-gperftools \
-        aur/steamcmd \
-        --noconfirm
+RUN yay -S --noconfirm \
+        protontricks \
+        vkbasalt \
+        lib32-vkbasalt \
+        obs-vkcapture-git \
+        lib32-obs-vkcapture-git \
+        lib32-gperftools \
+        steamcmd && \
+    rm -rf /home/build/.cache/*
+
 USER root
 WORKDIR /
 
-# Cleanup
-# Native march & tune. This is a gaming image and not something a user is going to compile things in with the intent to share.
-# We do this last because it'll only apply to updates the user makes going forward. We don't want to optimize for the build host's environment.
-RUN sed -i 's@ (Runtime)@@g' /usr/share/applications/steam.desktop && \
-    sed -i 's/-march=x86-64 -mtune=generic/-march=native -mtune=native/g' /etc/makepkg.conf && \
-    userdel -r build && \
-    rm -drf /home/build && \
-    sed -i '/build ALL=(ALL) NOPASSWD: ALL/d' /etc/sudoers && \
-    sed -i '/root ALL=(ALL) NOPASSWD: ALL/d' /etc/sudoers && \
-    rm -rf /home/build/.cache/* && \
-    rm -rf \
-        /tmp/* \
-        /var/cache/pacman/pkg/*
+ RUN userdel -r build && \
+     sed -i '/build ALL=(ALL) NOPASSWD: ALL/d' /etc/sudoers
 
-FROM bazzite-arch as bazzite-arch-gnome
+RUN rm -rf /tmp/* /var/cache/pacman/pkg/*
 
-# Replace KDE portal with GNOME portal, swap included icon theme.
-RUN sed -i 's/-march=native -mtune=native/-march=x86-64 -mtune=generic/g' /etc/makepkg.conf && \
-    pacman -Rnsdd \
-        xdg-desktop-portal-kde \
-        --noconfirm && \
-    pacman -S \
-        xdg-desktop-portal-gtk \
-        xdg-desktop-portal-gnome \
-        --noconfirm && \
-    rm -rf /var/cache/pacman/pkg/*
-
-# Cleanup
-RUN sed -i 's/-march=x86-64 -mtune=generic/-march=native -mtune=native/g' /etc/makepkg.conf && \
-    rm -rf \
-        /tmp/*
+CMD ["/bin/bash"]
