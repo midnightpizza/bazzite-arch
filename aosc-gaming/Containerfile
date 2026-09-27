@@ -1,0 +1,41 @@
+FROM aosc/aosc-os:latest
+
+RUN oma upgrade --yes
+
+RUN oma install --yes \
+        steam \
+        32subsystem \
+        xorg-server \
+        gamescope
+
+RUN oma install --yes \
+        mangohud \
+        mangohud+32 \
+        vkbasalt \
+        goverlay \
+        obs-studio
+
+RUN oma install --yes \
+        firefox \
+        thunar \
+        mousepad \
+        nano \
+        vim \
+        htop \
+        xdg-utils \
+        desktop-file-utils
+
+
+RUN mkdir -p /etc/xdg && \
+    printf '[Default Applications]\n' > /etc/xdg/mimeapps.list && \
+    printf 'x-scheme-handler/http=firefox.desktop\n' >> /etc/xdg/mimeapps.list && \
+    printf 'x-scheme-handler/https=firefox.desktop\n' >> /etc/xdg/mimeapps.list && \
+    printf 'text/html=firefox.desktop\n' >> /etc/xdg/mimeapps.list && \
+    printf 'inode/directory=thunar.desktop\n' >> /etc/xdg/mimeapps.list && \
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+
+RUN oma clean
+
+
+
+CMD ["/bin/bash"]
